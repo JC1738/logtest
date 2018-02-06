@@ -4,18 +4,43 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/Jeffail/gabs"
 	"github.com/fatih/structs"
 )
 
+var DefaultStructInfoFunc = func(o interface{}) (names []string, fields []string, jsonStruct string) {
+	s := structs.New(o)
 
-var DefaultStructInfo = func(s interface{}) (name string, fields string[], )
+	names = s.Names()
+	fields = []string{}
+	for _, f := range s.Fields() {
+		fmt.Printf("field name: %+v\n", f.Name())
+		fields = append(fields, f.Name())
+		if f.IsExported() {
 
+			fmt.Printf("value   : %+v\n", f.Value())
+			fmt.Printf("is zero : %+v\n", f.IsZero())
+		}
+	}
+
+	jsonStruct = ""
+	mapParent := structs.Map(o)
+	if mapB, err := json.Marshal(mapParent); err == nil {
+		jsonStruct = string(mapB)
+	} else {
+		fmt.Println("Failure to marshal map", err.Error())
+	}
+	fmt.Printf("struct: %s, fields: %s, value: %s\n", s.Name(), s.Names(), jsonStruct)
+
+	return
+}
 
 //Name struct
 type Name struct {
 	FullName string
 	first    string
 	last     string
+	LogInfo  func(o interface{}) (names []string, fields []string, jsonStruct string) `structs:"-"`
 }
 
 //Parent struct
@@ -27,25 +52,40 @@ type Parent struct {
 	Aunt1     aunt
 	aunt2     aunt
 	Uncle1    Uncle
+	LogInfo   func(o interface{}) (names []string, fields []string, jsonStruct string) `structs:"-"`
 }
 
 //Child struct
 type Child struct {
-	name   Name
-	age    int
-	Aunt   aunt
-	Uncle1 Uncle
-	uncle2 Uncle
+	name    Name
+	age     int
+	Aunt    aunt
+	Uncle1  Uncle
+	uncle2  Uncle
+	LogInfo func(o interface{}) (names []string, fields []string, jsonStruct string) `structs:"-"`
 }
 
 //Uncle struct
 type Uncle struct {
-	Name Name
-	age  int
+	Name    Name
+	Age     int
+	LogInfo func(o interface{}) (names []string, fields []string, jsonStruct string) `structs:"-"`
 }
 
 type aunt struct {
-	name Name
+	name    Name
+	LogInfo func(o interface{}) (names []string, fields []string, jsonStruct string) `structs:"-"`
+}
+
+func (a aunt) AuntLogInfo(o interface{}) (names []string, fields []string, jsonStruct string) {
+	names = []string{"aunt"}
+	fields = []string{"name"}
+	jsonObj := gabs.New()
+
+	jsonObj.Set(a.name, "aunt", "name")
+	jsonStruct = jsonObj.String()
+
+	return
 }
 
 func populateStruct() *Parent {
@@ -69,7 +109,7 @@ func populateStruct() *Parent {
 					FullName: "Kristin Castillo",
 					first:    "Kristin",
 					last:     "Castillo",
-				},
+					LogInfo:  aunt.AuntLogInfo},
 			},
 			Uncle1: Uncle{
 				Name: Name{
@@ -77,7 +117,8 @@ func populateStruct() *Parent {
 					first:    "Eric",
 					last:     "Castillo",
 				},
-				age: 33,
+				Age:     33,
+				LogInfo: DefaultStructInfoFunc,
 			},
 			uncle2: Uncle{
 				Name: Name{
@@ -85,7 +126,7 @@ func populateStruct() *Parent {
 					first:    "Mark",
 					last:     "Wu",
 				},
-				age: 43,
+				Age: 43,
 			},
 		},
 		secondKid: Child{
@@ -108,7 +149,7 @@ func populateStruct() *Parent {
 					first:    "Eric",
 					last:     "Castillo",
 				},
-				age: 33,
+				Age: 33,
 			},
 			uncle2: Uncle{
 				Name: Name{
@@ -116,7 +157,7 @@ func populateStruct() *Parent {
 					first:    "Mark",
 					last:     "Wu",
 				},
-				age: 43,
+				Age: 43,
 			},
 		},
 		Aunt1: aunt{
@@ -139,7 +180,8 @@ func populateStruct() *Parent {
 				first:    "Eric",
 				last:     "Castillo",
 			},
-			age: 33,
+			Age:     33,
+			LogInfo: DefaultStructInfoFunc,
 		},
 	}
 	return myParent
@@ -153,7 +195,17 @@ func main() {
 	}
 
 	myParent := populateStruct()
-	fmt.Println("%v", myParent)
+	names, fields, jsonString := myParent.Uncle1.LogInfo(myParent.Uncle1)
+
+	for _, n := range names {
+		fmt.Println("name uncle1 = ", n)
+	}
+	for _, field := range fields {
+		fmt.Println("field uncle1 = ", field)
+	}
+	fmt.Println("json uncle1 = ", jsonString)
+
+	fmt.Printf("%v", myParent)
 
 	n := structs.Names(myParent)
 	for _, name := range n {
@@ -170,10 +222,10 @@ func main() {
 		}
 	}
 
-	mapJSONString := ""
+	jsonStruct := ""
 	mapParent := structs.Map(myParent)
 	if mapB, err := json.Marshal(mapParent); err == nil {
-		mapJSONString = string(mapB)
+		jsonStruct = string(mapB)
 	}
-	fmt.Printf("struct: %s, fields: %s, value: %s\n", s.Name(), s.Names(), mapJSONString)
+	fmt.Printf("struct: %s, fields: %s, value: %s\n", s.Name(), s.Names(), jsonStruct)
 }
