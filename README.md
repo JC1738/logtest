@@ -14,4 +14,10 @@ type InnerLogger interface {
 }
 ```
 
+It is also possible to decerate the struct so that you admit fields:
 
+```
+`structs:"-"`
+`structs:",omitnested"`
+`structs:",omitempty"`
+```
