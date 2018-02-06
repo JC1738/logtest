@@ -3,40 +3,65 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
 
 	"github.com/Jeffail/gabs"
 	"github.com/fatih/structs"
 )
 
-//InnerLogger interface is used if struct wants to provide it's own way of returns names, fields, and json string
+/*
+*
+* The idea of this file is to show an example of Logging if you want to have a log line that consists of two indexed
+* types and as JSON blob.
+*
+* names is an index field that contains all the names of the structs under examination
+* types is an index field that contains all of the type names in the structs under examination
+* jsonStruct is non index field that contains the blob of the struct
+*
+ */
+
+//InnerLogger interface is used if struct wants to provide it's own way of returns names, types, and json string
 type InnerLogger interface {
-	InnerLogInfo() (names []string, fields []string, jsonStruct string)
+	InnerLogInfo() (names []string, types []string, jsonStruct string)
 }
 
-//DefaultStructInfoFunc is the default implementation for structs to use to return names, fields, and jsonStruct
+func getType(myvar interface{}) string {
+	if t := reflect.TypeOf(myvar); t.Kind() == reflect.Ptr {
+		return "*" + t.Elem().Name()
+	} else {
+		return t.Name()
+	}
+}
+
+//DefaultStructInfoFunc is the default implementation for structs to use to return names, types, and jsonStruct
 //It checks if the interface passed in implements InnerLogger and will use that instead
-func DefaultStructInfo(o interface{}) (names []string, fields []string, jsonStruct string) {
+func DefaultStructInfo(o interface{}) (names []string, types []string, jsonStruct string) {
 
 	if innerLog, ok := o.(InnerLogger); ok {
-		names, fields, jsonStruct = innerLog.InnerLogInfo()
+		names, types, jsonStruct = innerLog.InnerLogInfo()
 		return
 	}
-
 
 	s := structs.New(o)
 
 	names = s.Names()
-	fields = []string{}
-	
+	names = append(names, s.Name())
+	types = []string{}
 
-	//Open question, do we recursively call DefaultStructInfo on subsequent fields instuct
+	types = append(types, getType(o))
+
 	for _, f := range s.Fields() {
-		fmt.Printf("field name: %+v\n", f.Name())
-		fields = append(fields, f.Name())
 		if f.IsExported() {
-
-			fmt.Printf("value   : %+v\n", f.Value())
-			fmt.Printf("is zero : %+v\n", f.IsZero())
+			types = append(types, getType(f.Value()))
+			if f.Kind() == reflect.Struct {
+				innerNames, innerTypes, _ := DefaultStructInfo(f.Value())
+				names = append(names, innerNames...)
+				types = append(types, innerTypes...)
+			}
+			//fmt.Printf("value   : %+v\n", f.Value())
+			//fmt.Printf("is zero : %+v\n", f.IsZero())
+			//fmt.Printf("is kind : %s\n", f.Kind().String())
+			//fmt.Printf("is type : %s\n", getType(f.Value()))
 		}
 	}
 
@@ -47,13 +72,28 @@ func DefaultStructInfo(o interface{}) (names []string, fields []string, jsonStru
 	} else {
 		fmt.Println("Failure to marshal map", err.Error())
 	}
-	fmt.Printf("struct: %s, fields: %s, value: %s\n", s.Name(), s.Names(), jsonStruct)
 
 	return
 }
 
 //Note you can use `structs:"-"` to decerate a field to let the logger know that you don't a field logged
-
+//You can also use the following:
+//
+/// A value with the option of "omitnested" stops iterating further if the type
+// is a struct. Example:
+//
+//   // Fields is not processed further by this package.
+//   Field time.Time     `structs:",omitnested"`
+//   Field *http.Request `structs:",omitnested"`
+//
+// A tag value with the option of "omitempty" ignores that particular field and
+// is not added to the values if the field value is empty. Example:
+//
+//   // Field is skipped if empty
+//   Field string `structs:",omitempty"`
+//
+//
+//
 //Name struct
 type Name struct {
 	FullName string
@@ -81,19 +121,27 @@ type Child struct {
 	uncle2 Uncle
 }
 
+type Car struct {
+	Make  string
+	Model string
+}
+
 //Uncle struct
 type Uncle struct {
-	Name Name
-	Age  int
+	Name     Name
+	Age      int
+	UncleCar Car
 }
 
 type aunt struct {
 	name Name
 }
 
-func (a aunt) InnerLogInfo() (names []string, fields []string, jsonStruct string) {
+//InnerLogInfo used to replace default returing of names, types, and jsonStruct
+//This is especially useful if fields are not exported and want to still log
+func (a aunt) InnerLogInfo() (names []string, types []string, jsonStruct string) {
 	names = []string{"aunt"}
-	fields = []string{"name"}
+	types = []string{"Name"}
 	jsonObj := gabs.New()
 
 	jsonObj.Set(a.name.FullName, "aunt", "name")
@@ -132,6 +180,10 @@ func populateStruct() *Parent {
 					last:     "Castillo",
 				},
 				Age: 33,
+				UncleCar: Car{
+					Make:  "Buick",
+					Model: "Regal",
+				},
 			},
 			uncle2: Uncle{
 				Name: Name{
@@ -140,6 +192,10 @@ func populateStruct() *Parent {
 					last:     "Wu",
 				},
 				Age: 43,
+				UncleCar: Car{
+					Make:  "Lexus",
+					Model: "350",
+				},
 			},
 		},
 		secondKid: Child{
@@ -163,6 +219,10 @@ func populateStruct() *Parent {
 					last:     "Castillo",
 				},
 				Age: 33,
+				UncleCar: Car{
+					Make:  "Buick",
+					Model: "Regal",
+				},
 			},
 			uncle2: Uncle{
 				Name: Name{
@@ -171,6 +231,10 @@ func populateStruct() *Parent {
 					last:     "Wu",
 				},
 				Age: 43,
+				UncleCar: Car{
+					Make:  "Lexus",
+					Model: "350",
+				},
 			},
 		},
 		Aunt1: aunt{
@@ -194,20 +258,25 @@ func populateStruct() *Parent {
 				last:     "Castillo",
 			},
 			Age: 33,
+			UncleCar: Car{
+				Make:  "Buick",
+				Model: "Regal",
+			},
 		},
 	}
 	return myParent
 
 }
-func printVals(names []string, fields []string, jsonString string) {
+func printVals(names []string, types []string, jsonString string) {
 
 	for _, n := range names {
 		fmt.Println("name = ", n)
 	}
-	for _, field := range fields {
-		fmt.Println("field = ", field)
+	for _, t := range types {
+		fmt.Println("type = ", t)
 	}
 	fmt.Println("json = ", jsonString)
+	fmt.Println("***********************************************************")
 
 }
 func main() {
@@ -218,11 +287,14 @@ func main() {
 	}
 
 	myParent := populateStruct()
-	names, fields, jsonString := DefaultStructInfo(myParent.Uncle1)
-	printVals(names, fields, jsonString)
 
+	names, types, jsonString := DefaultStructInfo(myParent)
+	printVals(names, types, jsonString)
 
-	names, fields, jsonString = DefaultStructInfo(myParent.Aunt1)
-	printVals(names, fields, jsonString)
+	names, types, jsonString = DefaultStructInfo(myParent.Uncle1)
+	printVals(names, types, jsonString)
+
+	names, types, jsonString = DefaultStructInfo(myParent.Aunt1)
+	printVals(names, types, jsonString)
 
 }
