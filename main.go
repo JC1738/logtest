@@ -7,6 +7,7 @@ import (
 	"github.com/Jeffail/gabs"
 	"github.com/fatih/structs"
 )
+
 //InnerLogger interface is used if struct wants to provide it's own way of returns names, fields, and json string
 type InnerLogger interface {
 	InnerLogInfo() (names []string, fields []string, jsonStruct string)
@@ -14,16 +15,21 @@ type InnerLogger interface {
 
 //DefaultStructInfoFunc is the default implementation for structs to use to return names, fields, and jsonStruct
 //It checks if the interface passed in implements InnerLogger and will use that instead
-var DefaultStructInfoFunc = func(o interface{}) (names []string, fields []string, jsonStruct string) {
+func DefaultStructInfo(o interface{}) (names []string, fields []string, jsonStruct string) {
 
 	if innerLog, ok := o.(InnerLogger); ok {
 		names, fields, jsonStruct = innerLog.InnerLogInfo()
 		return
 	}
+
+
 	s := structs.New(o)
 
 	names = s.Names()
 	fields = []string{}
+	
+
+	//Open question, do we recursively call DefaultStructInfo on subsequent fields instuct
 	for _, f := range s.Fields() {
 		fmt.Printf("field name: %+v\n", f.Name())
 		fields = append(fields, f.Name())
@@ -46,12 +52,13 @@ var DefaultStructInfoFunc = func(o interface{}) (names []string, fields []string
 	return
 }
 
+//Note you can use `structs:"-"` to decerate a field to let the logger know that you don't a field logged
+
 //Name struct
 type Name struct {
 	FullName string
 	first    string
 	last     string
-	LogInfo  func(o interface{}) (names []string, fields []string, jsonStruct string) `structs:"-"`
 }
 
 //Parent struct
@@ -63,29 +70,25 @@ type Parent struct {
 	Aunt1     aunt
 	aunt2     aunt
 	Uncle1    Uncle
-	LogInfo   func(o interface{}) (names []string, fields []string, jsonStruct string) `structs:"-"`
 }
 
 //Child struct
 type Child struct {
-	name    Name
-	age     int
-	Aunt    aunt
-	Uncle1  Uncle
-	uncle2  Uncle
-	LogInfo func(o interface{}) (names []string, fields []string, jsonStruct string) `structs:"-"`
+	name   Name
+	age    int
+	Aunt   aunt
+	Uncle1 Uncle
+	uncle2 Uncle
 }
 
 //Uncle struct
 type Uncle struct {
-	Name    Name
-	Age     int
-	LogInfo func(o interface{}) (names []string, fields []string, jsonStruct string) `structs:"-"`
+	Name Name
+	Age  int
 }
 
 type aunt struct {
-	name    Name
-	LogInfo func(o interface{}) (names []string, fields []string, jsonStruct string) `structs:"-"`
+	name Name
 }
 
 func (a aunt) InnerLogInfo() (names []string, fields []string, jsonStruct string) {
@@ -120,7 +123,7 @@ func populateStruct() *Parent {
 					FullName: "Kristin Castillo",
 					first:    "Kristin",
 					last:     "Castillo",
-					LogInfo:  DefaultStructInfoFunc},
+				},
 			},
 			Uncle1: Uncle{
 				Name: Name{
@@ -128,8 +131,7 @@ func populateStruct() *Parent {
 					first:    "Eric",
 					last:     "Castillo",
 				},
-				Age:     33,
-				LogInfo: DefaultStructInfoFunc,
+				Age: 33,
 			},
 			uncle2: Uncle{
 				Name: Name{
@@ -177,7 +179,6 @@ func populateStruct() *Parent {
 				first:    "Kristin",
 				last:     "Castillo",
 			},
-			LogInfo: DefaultStructInfoFunc,
 		},
 		aunt2: aunt{
 			name: Name{
@@ -192,8 +193,7 @@ func populateStruct() *Parent {
 				first:    "Eric",
 				last:     "Castillo",
 			},
-			Age:     33,
-			LogInfo: DefaultStructInfoFunc,
+			Age: 33,
 		},
 	}
 	return myParent
@@ -218,10 +218,11 @@ func main() {
 	}
 
 	myParent := populateStruct()
-	names, fields, jsonString := myParent.Uncle1.LogInfo(myParent.Uncle1)
+	names, fields, jsonString := DefaultStructInfo(myParent.Uncle1)
 	printVals(names, fields, jsonString)
 
-	names, fields, jsonString = myParent.Aunt1.LogInfo(myParent.Aunt1)
+
+	names, fields, jsonString = DefaultStructInfo(myParent.Aunt1)
 	printVals(names, fields, jsonString)
 
 }
