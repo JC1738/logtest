@@ -25,6 +25,25 @@ type InnerLogger interface {
 	InnerLogInfo() (names []string, types []string, jsonStruct string)
 }
 
+func removeDuplicates(elements []string) []string {
+	// Use map to record duplicates as we find them.
+	encountered := map[string]bool{}
+	result := []string{}
+
+	for v := range elements {
+		if encountered[elements[v]] == true {
+			// Do not add duplicate.
+		} else {
+			// Record this element as an encountered element.
+			encountered[elements[v]] = true
+			// Append to result slice.
+			result = append(result, elements[v])
+		}
+	}
+	// Return the new slice.
+	return result
+}
+
 func getType(myvar interface{}) string {
 	if t := reflect.TypeOf(myvar); t.Kind() == reflect.Ptr {
 		return "*" + t.Elem().Name()
@@ -72,7 +91,8 @@ func DefaultStructInfo(o interface{}) (names []string, types []string, jsonStruc
 	} else {
 		fmt.Println("Failure to marshal map", err.Error())
 	}
-
+	names = removeDuplicates(names)
+	types = removeDuplicates(types)
 	return
 }
 
@@ -280,11 +300,6 @@ func printVals(names []string, types []string, jsonString string) {
 
 }
 func main() {
-	fmt.Println("vim-go")
-
-	if err := fmt.Errorf("foo"); err != nil {
-		fmt.Println("here")
-	}
 
 	myParent := populateStruct()
 
