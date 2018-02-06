@@ -7,8 +7,19 @@ import (
 	"github.com/Jeffail/gabs"
 	"github.com/fatih/structs"
 )
+//InnerLogger interface is used if struct wants to provide it's own way of returns names, fields, and json string
+type InnerLogger interface {
+	InnerLogInfo() (names []string, fields []string, jsonStruct string)
+}
 
+//DefaultStructInfoFunc is the default implementation for structs to use to return names, fields, and jsonStruct
+//It checks if the interface passed in implements InnerLogger and will use that instead
 var DefaultStructInfoFunc = func(o interface{}) (names []string, fields []string, jsonStruct string) {
+
+	if innerLog, ok := o.(InnerLogger); ok {
+		names, fields, jsonStruct = innerLog.InnerLogInfo()
+		return
+	}
 	s := structs.New(o)
 
 	names = s.Names()
@@ -77,12 +88,12 @@ type aunt struct {
 	LogInfo func(o interface{}) (names []string, fields []string, jsonStruct string) `structs:"-"`
 }
 
-func (a aunt) AuntLogInfo(o interface{}) (names []string, fields []string, jsonStruct string) {
+func (a aunt) InnerLogInfo() (names []string, fields []string, jsonStruct string) {
 	names = []string{"aunt"}
 	fields = []string{"name"}
 	jsonObj := gabs.New()
 
-	jsonObj.Set(a.name, "aunt", "name")
+	jsonObj.Set(a.name.FullName, "aunt", "name")
 	jsonStruct = jsonObj.String()
 
 	return
@@ -109,7 +120,7 @@ func populateStruct() *Parent {
 					FullName: "Kristin Castillo",
 					first:    "Kristin",
 					last:     "Castillo",
-					LogInfo:  aunt.AuntLogInfo},
+					LogInfo:  DefaultStructInfoFunc},
 			},
 			Uncle1: Uncle{
 				Name: Name{
@@ -166,6 +177,7 @@ func populateStruct() *Parent {
 				first:    "Kristin",
 				last:     "Castillo",
 			},
+			LogInfo: DefaultStructInfoFunc,
 		},
 		aunt2: aunt{
 			name: Name{
@@ -187,6 +199,17 @@ func populateStruct() *Parent {
 	return myParent
 
 }
+func printVals(names []string, fields []string, jsonString string) {
+
+	for _, n := range names {
+		fmt.Println("name = ", n)
+	}
+	for _, field := range fields {
+		fmt.Println("field = ", field)
+	}
+	fmt.Println("json = ", jsonString)
+
+}
 func main() {
 	fmt.Println("vim-go")
 
@@ -196,36 +219,9 @@ func main() {
 
 	myParent := populateStruct()
 	names, fields, jsonString := myParent.Uncle1.LogInfo(myParent.Uncle1)
+	printVals(names, fields, jsonString)
 
-	for _, n := range names {
-		fmt.Println("name uncle1 = ", n)
-	}
-	for _, field := range fields {
-		fmt.Println("field uncle1 = ", field)
-	}
-	fmt.Println("json uncle1 = ", jsonString)
+	names, fields, jsonString = myParent.Aunt1.LogInfo(myParent.Aunt1)
+	printVals(names, fields, jsonString)
 
-	fmt.Printf("%v", myParent)
-
-	n := structs.Names(myParent)
-	for _, name := range n {
-		fmt.Printf("%s\n", name)
-	}
-
-	s := structs.New(myParent)
-	for _, f := range s.Fields() {
-		fmt.Printf("field name: %+v\n", f.Name())
-
-		if f.IsExported() {
-			fmt.Printf("value   : %+v\n", f.Value())
-			fmt.Printf("is zero : %+v\n", f.IsZero())
-		}
-	}
-
-	jsonStruct := ""
-	mapParent := structs.Map(myParent)
-	if mapB, err := json.Marshal(mapParent); err == nil {
-		jsonStruct = string(mapB)
-	}
-	fmt.Printf("struct: %s, fields: %s, value: %s\n", s.Name(), s.Names(), jsonStruct)
 }
